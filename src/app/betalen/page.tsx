@@ -2,7 +2,6 @@
 
 import { Plus_Jakarta_Sans } from 'next/font/google'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700', '800'] })
 
@@ -28,15 +27,28 @@ const pakketten = [
 ]
 
 export default function BetalenPage() {
-  const router = useRouter()
   const [geselecteerd, setGeselecteerd] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function handleBetalen() {
     if (!geselecteerd) return
     setLoading(true)
-    // Mollie koppeling komt hier — wacht op API key van Alex
-    router.push('/betalen/verwerken')
+    try {
+      const res = await fetch('/api/betaling', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pakketId: geselecteerd }),
+      })
+      const data = await res.json()
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl
+      } else {
+        alert('Er is iets misgegaan. Probeer opnieuw.')
+      }
+    } catch {
+      alert('Er is iets misgegaan. Probeer opnieuw.')
+    }
+    setLoading(false)
   }
 
   return (
