@@ -2,6 +2,7 @@
 
 import { Plus_Jakarta_Sans } from 'next/font/google'
 import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700', '800'] })
 
@@ -34,16 +35,24 @@ export default function BetalenPage() {
     if (!geselecteerd) return
     setLoading(true)
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        window.location.href = '/login'
+        return
+      }
       const res = await fetch('/api/betaling', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ pakketId: geselecteerd }),
       })
       const data = await res.json()
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl
       } else {
-        alert('Er is iets misgegaan. Probeer opnieuw.')
+        alert(data.error || 'Er is iets misgegaan. Probeer opnieuw.')
       }
     } catch {
       alert('Er is iets misgegaan. Probeer opnieuw.')
