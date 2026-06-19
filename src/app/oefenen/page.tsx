@@ -53,7 +53,10 @@ export default function OefenenPage() {
       }))
 
       setAll(qs)
-      setCategories(Array.from(new Set(qs.map(q => q.categorie))).sort())
+      const cs = Array.from(new Set(qs.map(q => q.categorie))).sort()
+      setCategories(cs)
+      const param = new URLSearchParams(window.location.search).get('categorie')
+      if (param && cs.includes(param)) setCat(param)
       setLoading(false)
     })()
   }, [router])
