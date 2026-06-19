@@ -1,36 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createMollieClient } from '@mollie/api-client'
-
-const mollie = createMollieClient({ apiKey: process.env.MOLLIE_API_KEY! })
-
-const pakketten: Record<string, { naam: string; prijs: string }> = {
-  basis: { naam: 'Basis Pakket', prijs: '29.00' },
-  compleet: { naam: 'Compleet Pakket', prijs: '49.00' },
-}
+import { getAdminClient } from '@/lib/supabaseAdmin'
 
 export async function POST(req: NextRequest) {
-  try {
-    const { pakketId } = await req.json()
+  const authHeader = req.headers.get('authorization') || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+  if (!token) {
+    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
+  }
 
-    const pakket = pakketten[pakketId]
-    if (!pakket) {
-      return NextResponse.json({ error: 'Ongeldig pakket' }, { status: 400 })
-    }
+  const admin = getAdminClient()
+  const { data: userData, error: userErr } = await admin.auth.getUser(token)
+  if (userErr || !userData.user) {
+    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
+  }
+  const user = userData.user
+
+  // Look up the package in the database (single source of truth for price) = match with frontend.
+  const { pakketId } = await req.json()
+  const { data: course, error: courseErr } = await admin
+    .from('courses')
+    .select('id, slug, title, price_cents, is_active')
+    .eq('slug', pakketId)
+    .single()
+
+  if (courseErr || !course || !course.is_active) {
+    return NextResponse.json({ error: 'Ongeldig pakket' }, { status: 400 })
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL!
+
+  try {
+    const mollie = createMollieClient({ apiKey: process.env.MOLLIE_API_KEY! })
 
     const betaling = await mollie.payments.create({
-      amount: {
-        currency: 'EUR',
-        value: pakket.prijs,
-      },
-      description: `A+ Theorie — ${pakket.naam}`,
-      redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/betalen/bevestiging`,
-      cancelUrl: `${process.env.NEXT_PUBLIC_APP_URL}/betalen/fout`,
-      metadata: {
-        pakketId,
-      },
+      amount: { currency: 'EUR', value: (course.price_cents / 100).toFixed(2) },
+      description: `A+ Theorie — ${course.title}`,
+      redirectUrl: `${appUrl}/betalen/bevestiging`,
+      cancelUrl: `${appUrl}/betalen/fout`,
+      webhookUrl: `${appUrl}/api/webhooks/mollie`,
+      metadata: { userId: user.id, courseId: course.id, courseSlug: course.slug },
     })
 
-    return NextResponse.json({ checkoutUrl: betaling.getCheckoutUrl() })
+    await admin.from('orders').insert({
+      user_id: user.id,
+      course_id: course.id,
+      mollie_payment_id: betaling.id,
+      amount_cents: course.price_cents,
+      status: 'open',
+    })
+
+    const checkoutUrl =
+      typeof betaling.getCheckoutUrl === 'function'
+        ? betaling.getCheckoutUrl()
+        : (betaling as unknown as { _links?: { checkout?: { href?: string } } })._links?.checkout?.href
+
+    return NextResponse.json({ checkoutUrl })
   } catch (error) {
     console.error('Mollie error:', error)
     return NextResponse.json({ error: 'Betaling kon niet worden aangemaakt' }, { status: 500 })
