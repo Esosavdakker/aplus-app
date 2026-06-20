@@ -1,7 +1,8 @@
 'use client'
 
 import { Plus_Jakarta_Sans } from 'next/font/google'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700', '800'] })
@@ -28,8 +29,15 @@ const pakketten = [
 ]
 
 export default function BetalenPage() {
+  const router = useRouter()
   const [geselecteerd, setGeselecteerd] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) router.push('/login')
+    })
+  }, [router])
 
   async function handleBetalen() {
     if (!geselecteerd) return
