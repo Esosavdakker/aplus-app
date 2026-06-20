@@ -45,14 +45,14 @@ export default function BetalenPage() {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
-        window.location.href = '/login'
+        router.push('/login')
         return
       }
       const res = await fetch('/api/betaling', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ pakketId: geselecteerd }),
       })
@@ -60,7 +60,7 @@ export default function BetalenPage() {
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl
       } else {
-        alert(data.error || 'Er is iets misgegaan. Probeer opnieuw.')
+        alert(data.error || 'Er is iets misgegaan.')
       }
     } catch {
       alert('Er is iets misgegaan. Probeer opnieuw.')
