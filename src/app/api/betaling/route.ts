@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createMollieClient } from '@mollie/api-client'
+import { createClient } from '@supabase/supabase-js'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 
 export async function POST(req: NextRequest) {
@@ -9,8 +10,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
   }
 
-  const admin = getAdminClient()
-  const { data: userData, error: userErr } = await admin.auth.getUser(token)
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+  const { data: userData, error: userErr } = await supabase.auth.getUser(token)
   if (userErr || !userData.user) {
     return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
   }
@@ -18,6 +22,7 @@ export async function POST(req: NextRequest) {
 
   // Look up the package in the database (single source of truth for price) = match with frontend.
   const { pakketId } = await req.json()
+  const admin = getAdminClient()
   const { data: course, error: courseErr } = await admin
     .from('courses')
     .select('id, slug, title, price_cents, is_active')
